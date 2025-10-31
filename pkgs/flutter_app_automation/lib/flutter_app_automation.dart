@@ -651,7 +651,7 @@ class FlutterAppAutomation {
   }
 }
 
-  static Future<Map<String, Object?>> _handleGetWidgetTree(
+  Future<Map<String, Object?>> _handleGetWidgetTree(
     Map<String, Object?> payload,
   ) async {
     final inspector = WidgetInspectorService.instance;
