@@ -667,6 +667,13 @@ base mixin DartToolingDaemonSupport
     return await callback(await vmService);
   }
 
+  @protected
+  Future<CallToolResult> callWithActiveVmService(
+    Future<CallToolResult> Function(VmService) callback,
+  ) {
+    return _callOnVmService(callback: callback);
+  }
+
   /// Retrieves the active location from the editor.
   Future<CallToolResult> _getActiveLocation(CallToolRequest request) async {
     if (_dtd == null) return _dtdNotConnected;

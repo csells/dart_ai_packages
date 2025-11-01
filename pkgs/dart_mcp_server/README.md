@@ -161,5 +161,12 @@ For more information, see the official VS Code documentation for
 | `set_widget_selection_mode` | Set Widget Selection Mode | Enables or disables widget selection mode in the active Flutter application. Requires "connect_dart_tooling_daemon" to be successfully called first. This is not necessary when using flutter driver, only use it when you want the user to select a widget. |
 | `signature_help` | Signature help | Get signature help for an API being used at a given cursor position in a file. |
 | `stop_app` |  | Kills a running Flutter process started by the launch_app tool. |
+| `app_control.getWidgetTree` | App widget tree | Fetches the Flutter widget tree for the connected application using the automation service extensions. Requires the app to install `flutter_app_automation`. |
+| `app_control.getSemantics` | App semantics tree | Returns the semantics tree (or a subtree) for the connected Flutter app. Requires the app to install `flutter_app_automation`. |
+| `app_control.tap` | Tap widget | Resolves a selector against app semantics and performs a tap action. Requires the app to install `flutter_app_automation`. |
+| `app_control.enterText` | Enter text | Sends text to a semantics target via the automation extensions. Requires the app to install `flutter_app_automation`. |
+| `app_control.scroll` | Scroll widget | Scrolls the matched semantics node either by delta or to an absolute offset. Requires the app to install `flutter_app_automation`. |
+| `app_control.screenshot` | App screenshot | Captures a PNG screenshot of the automation repaint boundary. Requires the app to install `flutter_app_automation`. |
+| `app_control.waitForIdle` | Wait for idle | Pumps frames until animations and microtasks settle. Requires the app to install `flutter_app_automation`. |
 
 <!-- generated -->

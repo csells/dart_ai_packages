@@ -1,0 +1,16 @@
+name: automation_counter_app
+publish_to: none
+description: Fixture app for flutter_app_automation integration tests.
+environment:
+  sdk: ">=3.5.0 <4.0.0"
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_app_automation:
+    path: ../../..
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+flutter:
+  uses-material-design: true

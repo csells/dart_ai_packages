@@ -17,6 +17,7 @@ import 'package:unified_analytics/unified_analytics.dart';
 
 import 'arg_parser.dart';
 import 'mixins/analyzer.dart';
+import 'mixins/app_control.dart';
 import 'mixins/dash_cli.dart';
 import 'mixins/dtd.dart';
 import 'mixins/flutter_launcher.dart';
@@ -42,6 +43,7 @@ final class DartMCPServer extends MCPServer
         PubSupport,
         PubDevSupport,
         DartToolingDaemonSupport,
+        AppControlSupport,
         FlutterLauncherSupport,
         PromptsSupport,
         DashPrompts
