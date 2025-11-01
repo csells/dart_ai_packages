@@ -2,7 +2,6 @@
 // for details. All rights reserved. Use of this source code is governed by a
 // BSD-style license that can be found in the LICENSE file.
 
-
 import 'dart:async';
 import 'dart:convert';
 
@@ -21,7 +20,8 @@ base mixin AppControlSupport on DartToolingDaemonSupport {
         description: 'Match by ValueKey string representation.',
         properties: {
           'byKey': Schema.string(
-            description: 'Sub-string to match against widget ValueKey.toString().',
+            description:
+                'Sub-string to match against widget ValueKey.toString().',
           ),
         },
         required: const ['byKey'],
@@ -29,21 +29,27 @@ base mixin AppControlSupport on DartToolingDaemonSupport {
       Schema.object(
         description: 'Match by semantics label.',
         properties: {
-          'bySemanticsLabel': Schema.string(description: 'Exact semantics label to match.'),
+          'bySemanticsLabel': Schema.string(
+            description: 'Exact semantics label to match.',
+          ),
         },
         required: const ['bySemanticsLabel'],
       ),
       Schema.object(
         description: 'Match by widget runtime type name.',
         properties: {
-          'byType': Schema.string(description: 'Widget runtimeType to match.'),
+          'byType': Schema.string(
+            description: 'Widget runtimeType to match.',
+          ),
         },
         required: const ['byType'],
       ),
       Schema.object(
         description: 'Match by Text widget contents.',
         properties: {
-          'byText': Schema.string(description: 'Exact text content to match.'),
+          'byText': Schema.string(
+            description: 'Exact text content to match.',
+          ),
         },
         required: const ['byText'],
       ),
@@ -67,7 +73,8 @@ base mixin AppControlSupport on DartToolingDaemonSupport {
 
   static final Tool _getWidgetTreeTool = Tool(
     name: 'app_control.getWidgetTree',
-    description: 'Returns the widget summary tree from the running Flutter app.',
+    description:
+        'Returns the widget summary tree from the running Flutter app.',
     inputSchema: Schema.object(
       properties: {
         'withPreviews': Schema.bool(
@@ -86,7 +93,9 @@ base mixin AppControlSupport on DartToolingDaemonSupport {
     description: 'Returns a semantics subtree identified by nodeId.',
     inputSchema: Schema.object(
       properties: {
-        'nodeId': Schema.int(description: 'Optional semantics node id to use as the root.'),
+        'nodeId': Schema.int(
+          description: 'Optional semantics node id to use as the root.',
+        ),
       },
     ),
     outputSchema: _extensionResponseSchema,
@@ -94,7 +103,8 @@ base mixin AppControlSupport on DartToolingDaemonSupport {
 
   static final Tool _tapTool = Tool(
     name: 'app_control.tap',
-    description: 'Performs a tap gesture on a widget resolved by selector.',
+    description:
+        'Performs a tap gesture on a widget resolved by selector.',
     inputSchema: Schema.object(
       required: const ['selector'],
       properties: {
@@ -117,7 +127,8 @@ base mixin AppControlSupport on DartToolingDaemonSupport {
         'selector': _selectorSchema,
         'text': Schema.string(description: 'Text to enter.'),
         'replace': Schema.bool(
-          description: 'Replace existing text. Non-replace mode may be limited.',
+          description:
+              'Replace existing text. Non-replace mode may be limited.',
         ),
       },
     ),
@@ -136,8 +147,12 @@ base mixin AppControlSupport on DartToolingDaemonSupport {
         'toOffset': Schema.object(
           description: 'Absolute offset to scroll to.',
           properties: {
-            'x': Schema.num(description: 'Horizontal offset in logical pixels.'),
-            'y': Schema.num(description: 'Vertical offset in logical pixels.'),
+            'x': Schema.num(
+              description: 'Horizontal offset in logical pixels.',
+            ),
+            'y': Schema.num(
+              description: 'Vertical offset in logical pixels.',
+            ),
           },
         ),
       },
@@ -162,8 +177,13 @@ base mixin AppControlSupport on DartToolingDaemonSupport {
     description: 'Waits for the Flutter app to finish pending frames.',
     inputSchema: Schema.object(
       properties: {
-        'timeoutMs': Schema.int(description: 'Timeout in milliseconds.', minimum: 0),
-        'settleFrames': Schema.int(description: 'Number of consecutive idle frames to await.'),
+        'timeoutMs': Schema.int(
+          description: 'Timeout in milliseconds.',
+          minimum: 0,
+        ),
+        'settleFrames': Schema.int(
+          description: 'Number of consecutive idle frames to await.',
+        ),
       },
     ),
     outputSchema: _extensionResponseSchema,
@@ -278,7 +298,7 @@ base mixin AppControlSupport on DartToolingDaemonSupport {
           (iso) => iso.id != null,
           orElse: () => throw StateError('No active isolate found.'),
         );
-        final isolateId = isolate.id;
+        final isolateId = isolate?.id;
         if (isolateId == null) {
           return CallToolResult(
             content: [TextContent(text: 'No active isolate id found.')],
@@ -294,8 +314,9 @@ base mixin AppControlSupport on DartToolingDaemonSupport {
           isolateId: isolateId,
           args: args,
         );
-        final jsonResponse =
-            Map<String, Object?>.from(response.json ?? const <String, Object?>{});
+        final jsonResponse = Map<String, Object?>.from(
+          response.json ?? const <String, Object?>{},
+        );
         final serialized = jsonEncode(jsonResponse);
         return CallToolResult(
           content: [TextContent(text: serialized)],
@@ -311,10 +332,9 @@ base mixin AppControlSupport on DartToolingDaemonSupport {
     });
   }
 
-  Future<CallToolResult> _invalidSelector({String message = 'selector must be an object'}) async {
-    return CallToolResult(
-      content: [TextContent(text: message)],
-      isError: true,
-    );
+  Future<CallToolResult> _invalidSelector({
+    String message = 'selector must be an object',
+  }) async {
+    return CallToolResult(content: [TextContent(text: message)], isError: true);
   }
 }

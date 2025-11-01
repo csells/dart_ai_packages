@@ -2,10 +2,9 @@ library flutter_app_automation;
 
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
+import 'dart:developer' as developer;
 import 'dart:ui' as ui;
 
-import 'package:flutter/animation.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
@@ -22,7 +21,8 @@ class FlutterAppAutomation {
 
   static const _objectGroupName = 'flutter-app-automation';
 
-  static final GlobalKey _rootBoundaryKey = GlobalKey(debugLabel: _objectGroupName);
+  static final GlobalKey _rootBoundaryKey =
+      GlobalKey(debugLabel: _objectGroupName);
 
   static bool _installed = false;
 
@@ -92,7 +92,6 @@ class FlutterAppAutomation {
   }
 
   static void _registerExtensions() {
-    ServicesBinding.instance.ensureInitialized();
     SemanticsBinding.instance.ensureSemantics();
 
     _register('app.getWidgetTree', _handleGetWidgetTree);
@@ -108,16 +107,19 @@ class FlutterAppAutomation {
     String name,
     Future<Map<String, Object?>> Function(Map<String, Object?> payload) handler,
   ) {
-    _log('Registering service extension', details: 'ext.$name');
-    ServicesBinding.instance.registerServiceExtension(
-      name: name,
-      callback: (parameters) async {
+    _log('Registering service extension', details: 'ext.app.$name');
+    developer.registerExtension(
+      'ext.app.$name',
+      (method, parameters) async {
         try {
           final payload = _decodePayload(parameters);
           _log('Handling $name request', details: payload);
           final result = await handler(payload);
           _log('Completed $name request', details: result);
-          return {'ok': true, 'result': result};
+          final response = {'ok': true, 'result': result};
+          return developer.ServiceExtensionResponse.result(
+            jsonEncode(response),
+          );
         } catch (error, stackTrace) {
           _log('Error handling $name request', details: '$error');
           FlutterError.reportError(
@@ -130,7 +132,10 @@ class FlutterAppAutomation {
               },
             ),
           );
-          return {'ok': false, 'error': '$error'};
+          final response = {'ok': false, 'error': '$error'};
+          return developer.ServiceExtensionResponse.result(
+            jsonEncode(response),
+          );
         }
       },
     );
@@ -163,7 +168,7 @@ class FlutterAppAutomation {
       nodeId = null;
     }
 
-    final owner = SemanticsBinding.instance.pipelineOwner.semanticsOwner;
+    final owner = RendererBinding.instance.rootPipelineOwner.semanticsOwner;
     final root = owner?.rootSemanticsNode;
     if (owner == null || root == null) {
       _log('Semantics not enabled when handling getSemantics');
@@ -211,10 +216,7 @@ class FlutterAppAutomation {
       'label': data.label,
       'value': data.value,
       'hint': data.hint,
-      'flags': [
-        for (final flag in SemanticsFlag.values)
-          if (data.hasFlag(flag)) flag.name,
-      ],
+      'flags': data.flagsCollection.toStrings().toList(),
       'actions': [
         for (final action in SemanticsAction.values)
           if (data.hasAction(action)) action.name,
@@ -224,13 +226,8 @@ class FlutterAppAutomation {
       if (transform != null) 'transform': transform.storage.toList(),
       'widgetType': element?.widget.runtimeType.toString(),
       'widgetKey': element?.widget.key?.toString(),
-      if (element?.widget is Text)
-        'text': (element!.widget as Text).data,
-      if (includeChildren)
-        'children': [
-          for (final child in node.childrenInTraversalOrder)
-            _serializeSemantics(child, includeChildren: includeChildren),
-        ],
+      if (element?.widget is Text) 'text': (element!.widget as Text).data,
+      if (includeChildren) 'children': _collectChildren(node),
     };
   }
 
@@ -249,7 +246,7 @@ class FlutterAppAutomation {
       return {'performed': false, 'reason': 'No node matched selector'};
     }
 
-    final owner = SemanticsBinding.instance.pipelineOwner.semanticsOwner;
+    final owner = RendererBinding.instance.rootPipelineOwner.semanticsOwner;
     if (owner == null) {
       _log('Semantics owner missing when attempting tap');
       return {'performed': false, 'reason': 'Semantics not enabled'};
@@ -273,7 +270,8 @@ class FlutterAppAutomation {
     _log('Resolving enterText selector', details: selector.toJson());
     final target = _resolveTarget(selector);
     if (target == null) {
-      _log('Enter text selector resolved to no node', details: selector.toJson());
+      _log('Enter text selector resolved to no node',
+          details: selector.toJson());
       return {'performed': false, 'reason': 'No node matched selector'};
     }
 
@@ -283,7 +281,7 @@ class FlutterAppAutomation {
       focusNode?.requestFocus();
     }
 
-    final owner = SemanticsBinding.instance.pipelineOwner.semanticsOwner;
+    final owner = RendererBinding.instance.rootPipelineOwner.semanticsOwner;
     if (owner == null) {
       _log('Semantics owner missing when attempting enterText');
       return {'performed': false, 'reason': 'Semantics not enabled'};
@@ -316,7 +314,8 @@ class FlutterAppAutomation {
 
     final element = target.element;
     if (element == null) {
-      _log('Unable to resolve widget element for scroll selector', details: selector.toJson());
+      _log('Unable to resolve widget element for scroll selector',
+          details: selector.toJson());
       return {'performed': false, 'reason': 'Unable to resolve widget context'};
     }
 
@@ -327,7 +326,7 @@ class FlutterAppAutomation {
     }
 
     final position = scrollable.position;
-    final curve = Curves.easeInOut;
+    const curve = Curves.easeInOut;
     final duration = _config.scrollAnimationDuration;
 
     final toOffset = payload['toOffset'] as Map<String, Object?>?;
@@ -335,11 +334,15 @@ class FlutterAppAutomation {
       final double? x = _asDouble(toOffset['x']);
       final double? y = _asDouble(toOffset['y']);
       if (position.axis == Axis.horizontal && x != null) {
-        final targetPixels = x.clamp(position.minScrollExtent, position.maxScrollExtent);
-        await position.animateTo(targetPixels, duration: duration, curve: curve);
+        final targetPixels =
+            x.clamp(position.minScrollExtent, position.maxScrollExtent);
+        await position.animateTo(targetPixels,
+            duration: duration, curve: curve);
       } else if (position.axis == Axis.vertical && y != null) {
-        final targetPixels = y.clamp(position.minScrollExtent, position.maxScrollExtent);
-        await position.animateTo(targetPixels, duration: duration, curve: curve);
+        final targetPixels =
+            y.clamp(position.minScrollExtent, position.maxScrollExtent);
+        await position.animateTo(targetPixels,
+            duration: duration, curve: curve);
       } else {
         return {'performed': false, 'reason': 'Missing axis offset for scroll'};
       }
@@ -353,7 +356,11 @@ class FlutterAppAutomation {
     }
 
     await _waitForSettleFrames();
-    return {'performed': true, 'nodeId': target.node.id, 'pixels': position.pixels};
+    return {
+      'performed': true,
+      'nodeId': target.node.id,
+      'pixels': position.pixels
+    };
   }
 
   static Future<Map<String, Object?>> _handleWaitForIdle(
@@ -420,13 +427,15 @@ class FlutterAppAutomation {
       return {'pngBase64': null, 'reason': 'Root boundary not found'};
     }
 
-    final double ratio = pixelRatio ?? ui.window.devicePixelRatio;
+    final double ratio = pixelRatio ??
+        WidgetsBinding.instance.platformDispatcher.views.first.devicePixelRatio;
     _log('Capturing screenshot', details: {
       'pixelRatio': ratio,
       if (highlightSelector != null) 'highlight': highlightSelector.toJson(),
     });
     final ui.Image image = await repaintBoundary.toImage(pixelRatio: ratio);
-    final ByteData? bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+    final ByteData? bytes =
+        await image.toByteData(format: ui.ImageByteFormat.png);
     if (bytes == null) {
       _log('Unable to encode screenshot image bytes');
       return {'pngBase64': null, 'reason': 'Unable to encode screenshot'};
@@ -456,11 +465,12 @@ class FlutterAppAutomation {
 
   static bool get _isUiIdle {
     final scheduler = SchedulerBinding.instance;
-    return !scheduler.hasScheduledFrame && scheduler.transientCallbackCount == 0;
+    return !scheduler.hasScheduledFrame &&
+        scheduler.transientCallbackCount == 0;
   }
 
   static AutomationTarget? _resolveTarget(AutomationSelector selector) {
-    final owner = SemanticsBinding.instance.pipelineOwner.semanticsOwner;
+    final owner = RendererBinding.instance.rootPipelineOwner.semanticsOwner;
     final root = owner?.rootSemanticsNode;
     if (owner == null || root == null) {
       return null;
@@ -553,12 +563,36 @@ class FlutterAppAutomation {
   }
 
   static Element? _elementForSemanticsNode(SemanticsNode node) {
-    final owner = node.debugOwner;
-    if (owner is RenderObject) {
-      final creator = owner.debugCreator;
+    final owner = RendererBinding.instance.rootPipelineOwner.semanticsOwner;
+    if (owner == null) {
+      return null;
+    }
+    SemanticsNode? current = node;
+    while (current != null) {
+      final nodeId = current.id;
+      final renderObjectOwner = RendererBinding.instance.rootPipelineOwner;
+      RenderObject? foundRenderObject;
+      void visitRenderObject(RenderObject? renderObject) {
+        if (renderObject == null || foundRenderObject != null) {
+          return;
+        }
+        if (renderObject is RenderSemanticsGestureHandler ||
+            renderObject is RenderSemanticsAnnotations) {
+          final semanticsNode = renderObject.debugSemantics;
+          if (semanticsNode?.id == nodeId) {
+            foundRenderObject = renderObject;
+            return;
+          }
+        }
+        renderObject.visitChildren(visitRenderObject);
+      }
+
+      visitRenderObject(renderObjectOwner.rootNode);
+      final creator = foundRenderObject?.debugCreator;
       if (creator is DebugCreator) {
         return creator.element;
       }
+      current = current.parent;
     }
     return null;
   }
@@ -588,15 +622,22 @@ class FlutterAppAutomation {
     final pictureRecorder = ui.PictureRecorder();
     final canvas = Canvas(
       pictureRecorder,
-      Rect.fromLTWH(0, 0, frame.image.width.toDouble(), frame.image.height.toDouble()),
+      Rect.fromLTWH(
+          0, 0, frame.image.width.toDouble(), frame.image.height.toDouble()),
     );
     final paint = Paint()
       ..color = const Color(0x66FF5722)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 4.0;
     canvas.drawImage(frame.image, Offset.zero, Paint());
-    final rect = _semanticsGlobalRect(node).scale(pixelRatio, pixelRatio);
-    canvas.drawRect(rect, paint);
+    final rect = _semanticsGlobalRect(node);
+    final scaledRect = Rect.fromLTWH(
+      rect.left * pixelRatio,
+      rect.top * pixelRatio,
+      rect.width * pixelRatio,
+      rect.height * pixelRatio,
+    );
+    canvas.drawRect(scaledRect, paint);
     final highlighted = await pictureRecorder
         .endRecording()
         .toImage(frame.image.width, frame.image.height);
@@ -649,38 +690,29 @@ class FlutterAppAutomation {
     }
     return null;
   }
-}
 
-  Future<Map<String, Object?>> _handleGetWidgetTree(
+  static List<Map<String, Object?>> _collectChildren(SemanticsNode node) {
+    final children = <SemanticsNode>[];
+    node.visitChildren((child) {
+      children.add(child);
+      return true;
+    });
+    return [
+      for (final child in children)
+        _serializeSemantics(child, includeChildren: true),
+    ];
+  }
+
+  static Future<Map<String, Object?>> _handleGetWidgetTree(
     Map<String, Object?> payload,
   ) async {
-    final inspector = WidgetInspectorService.instance;
-    final withPreviews = payload['withPreviews'] == true;
-    final subtreeId = payload['subtreeId'] as String?;
-    final groupName = _objectGroupName;
-
-    final String jsonTree;
-    if (withPreviews) {
-      if (subtreeId != null) {
-        jsonTree = inspector.getWidgetSummaryTreeWithPreviews(subtreeId, groupName);
-      } else {
-        jsonTree = inspector.getRootWidgetSummaryTreeWithPreviews(groupName);
-      }
-    } else {
-      if (subtreeId != null) {
-        jsonTree = inspector.getWidgetSummaryTree(subtreeId, groupName);
-      } else {
-        jsonTree = inspector.getRootWidgetSummaryTree(groupName);
-      }
-    }
-
-    inspector.disposeGroup(groupName);
-    final decoded = jsonDecode(jsonTree);
-    if (decoded is Map<String, Object?>) {
-      return decoded;
-    }
-    return {'tree': decoded};
+    return {
+      'error':
+          'Widget tree inspection not yet implemented. Use Flutter DevTools '
+              'or the VM service inspector extensions directly.',
+    };
   }
+}
 
 /// Configuration for [FlutterAppAutomation].
 @immutable

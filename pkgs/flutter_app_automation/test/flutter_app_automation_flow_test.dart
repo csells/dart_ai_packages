@@ -3,8 +3,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:async/async.dart';
-import 'package:dart_mcp/api.dart';
 import 'package:dart_mcp/client.dart';
+import 'package:dart_mcp/stdio.dart';
 import 'package:dtd/dtd.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -43,7 +43,8 @@ void main() {
 
       final semantics = await harness.semantics();
       expect(
-        _semanticsContainsLabel(semantics['semantics'] as Map<String, Object?>?, 'counter:1'),
+        _semanticsContainsLabel(
+            semantics['semantics'] as Map<String, Object?>?, 'counter:1'),
         isTrue,
         reason: 'Semantics tree should report the incremented counter.',
       );
@@ -57,26 +58,34 @@ void main() {
       final initialAppBarColor = _colorAt(initialImage, 10, 10);
       final reloadedAppBarColor = _colorAt(reloadedImage, 10, 10);
       expect(reloadedAppBarColor, isNot(equals(initialAppBarColor)));
-      expect(reloadedAppBarColor.red, greaterThan(initialAppBarColor.red));
+      expect(
+        (reloadedAppBarColor.r * 255.0).round() & 0xff,
+        greaterThan((initialAppBarColor.r * 255.0).round() & 0xff),
+      );
 
       expect(
-        harness.automationLogs.where((line) => line.contains('app.screenshot')).length,
+        harness.automationLogs
+            .where((line) => line.contains('app.screenshot'))
+            .length,
         greaterThanOrEqualTo(3),
         reason: 'Expected automation debug logs for screenshot handling.',
       );
       expect(
-        harness.automationLogs.any((line) => line.contains('Resolving tap selector')),
+        harness.automationLogs
+            .any((line) => line.contains('Resolving tap selector')),
         isTrue,
         reason: 'Expected automation logs for tap resolution.',
       );
-      expect(harness.serverLogs, isNotEmpty, reason: 'MCP server logs should be captured.');
+      expect(harness.serverLogs, isNotEmpty,
+          reason: 'MCP server logs should be captured.');
     });
   });
 }
 
 img.Image _decodeImage(Map<String, Object?> payload) {
   final pngBase64 = payload['pngBase64'] as String?;
-  expect(pngBase64, isNotNull, reason: 'Expected pngBase64 in screenshot payload');
+  expect(pngBase64, isNotNull,
+      reason: 'Expected pngBase64 in screenshot payload');
   final bytes = base64Decode(pngBase64!);
   final decoded = img.decodePng(bytes);
   expect(decoded, isNotNull, reason: 'Expected valid PNG image data');
@@ -124,12 +133,11 @@ bool _semanticsContainsLabel(Map<String, Object?>? node, String label) {
 
 Color _colorAt(img.Image image, int x, int y) {
   final pixel = image.getPixel(x, y);
-  return Color.fromARGB(
-    img.getAlpha(pixel),
-    img.getRed(pixel),
-    img.getGreen(pixel),
-    img.getBlue(pixel),
-  );
+  final r = (pixel.r * 255.0).round() & 0xff;
+  final g = (pixel.g * 255.0).round() & 0xff;
+  final b = (pixel.b * 255.0).round() & 0xff;
+  final a = (pixel.a * 255.0).round() & 0xff;
+  return Color.fromARGB(a, r, g, b);
 }
 
 class _AutomationE2EHarness {
@@ -176,7 +184,8 @@ class _AutomationE2EHarness {
       'integration_fixtures',
       'automation_counter_app',
     ));
-    final workingDir = await Directory.systemTemp.createTemp('automation_counter_app_');
+    final workingDir =
+        await Directory.systemTemp.createTemp('automation_counter_app_');
     await _copyDirectory(templateDir, workingDir);
     await _rewritePubspec(workingDir, packageDir.path);
 
@@ -185,12 +194,16 @@ class _AutomationE2EHarness {
     final automationLogs = <String>[];
     final serverLogs = <String>[];
 
-    final dtdProcess = await Process.start('dart', ['tooling-daemon', '--machine']);
-    final dtdStdoutStream =
-        dtdProcess.stdout.transform(utf8.decoder).transform(const LineSplitter()).asBroadcastStream();
+    final dtdProcess =
+        await Process.start('dart', ['tooling-daemon', '--machine']);
+    final dtdStdoutStream = dtdProcess.stdout
+        .transform(utf8.decoder)
+        .transform(const LineSplitter())
+        .asBroadcastStream();
     final dtdFirstLine = await dtdStdoutStream.first;
     final dtdInfo = jsonDecode(dtdFirstLine) as Map<String, Object?>;
-    final toolingDetails = dtdInfo['tooling_daemon_details'] as Map<String, Object?>;
+    final toolingDetails =
+        dtdInfo['tooling_daemon_details'] as Map<String, Object?>;
     final dtdUri = toolingDetails['uri'] as String;
     final dtdSecret = toolingDetails['trusted_client_secret'] as String;
 
@@ -200,14 +213,19 @@ class _AutomationE2EHarness {
 
     final dtd = await DartToolingDaemon.connect(Uri.parse(dtdUri));
 
-    final serverProcess = await Process.start('dart', ['run', '../dart_mcp_server:main'],
+    final serverProcess = await Process.start(
+        'dart', ['run', '../dart_mcp_server:main'],
         workingDirectory: packageDir.path);
     serverProcess.stderr.transform(utf8.decoder).listen((line) {
       serverLogs.add('[stderr] $line');
     });
 
     final client = _AutomationTestClient();
-    final connection = client.connectStdioServer(serverProcess.stdin, serverProcess.stdout);
+    final channel = stdioChannel(
+      input: serverProcess.stdout,
+      output: serverProcess.stdin,
+    );
+    final connection = client.connectServer(channel);
     final initializeResult = await connection.initialize(
       InitializeRequest(
         protocolVersion: ProtocolVersion.latestSupported,
@@ -218,12 +236,14 @@ class _AutomationE2EHarness {
     expect(
       initializeResult.protocolVersion?.isSupported,
       isTrue,
-      reason: 'Failed to negotiate MCP protocol version: ${initializeResult.protocolVersion}',
+      reason:
+          'Failed to negotiate MCP protocol version: ${initializeResult.protocolVersion}',
     );
     connection.notifyInitialized(InitializedNotification());
 
     final serverLogSubscription = connection.onLog.listen((log) {
-      serverLogs.add(log.message ?? '');
+      final data = log.data;
+      serverLogs.add(data is String ? data : data.toString());
     });
 
     final flutterProcess = await Process.start(
@@ -239,8 +259,10 @@ class _AutomationE2EHarness {
       runInShell: true,
     );
 
-    final stdoutStream =
-        flutterProcess.stdout.transform(utf8.decoder).transform(const LineSplitter()).asBroadcastStream();
+    final stdoutStream = flutterProcess.stdout
+        .transform(utf8.decoder)
+        .transform(const LineSplitter())
+        .asBroadcastStream();
     final stdoutSubscription = stdoutStream.listen(automationLogs.add);
     final stderrSubscription =
         flutterProcess.stderr.transform(utf8.decoder).listen((line) {
@@ -276,7 +298,7 @@ class _AutomationE2EHarness {
     final connectResult = await connection.callTool(
       CallToolRequest(
         name: 'connect_dart_tooling_daemon',
-        arguments: {ParameterNames.uri: dtdUri},
+        arguments: {'uri': dtdUri},
       ),
     );
     expect(
@@ -318,8 +340,11 @@ class _AutomationE2EHarness {
   Future<void> updateThemeSeedColor(Color color) async {
     final themeFile = File(p.join(projectDir.path, 'lib', 'theme.dart'));
     final contents = await themeFile.readAsString();
-    final newLiteral = 'Color(0x${color.value.toRadixString(16).padLeft(8, '0').toUpperCase()})';
-    final updated = contents.replaceFirst(RegExp(r'Color\(0x[0-9A-Fa-f]{8}\)'), newLiteral);
+    final argb = color.toARGB32();
+    final newLiteral =
+        'Color(0x${argb.toRadixString(16).padLeft(8, '0').toUpperCase()})';
+    final updated =
+        contents.replaceFirst(RegExp(r'Color\(0x[0-9A-Fa-f]{8}\)'), newLiteral);
     if (updated == contents) {
       throw StateError('Failed to update theme color literal.');
     }
@@ -366,7 +391,8 @@ class _AutomationE2EHarness {
       }
       final structured = lastResult!.structuredContent;
       if (structured is! Map<String, Object?>) {
-        throw StateError('Expected structured response for $tool, got: $structured');
+        throw StateError(
+            'Expected structured response for $tool, got: $structured');
       }
       if (structured['ok'] != true) {
         throw StateError('Extension reported error for $tool: $structured');
@@ -391,7 +417,8 @@ class _AutomationE2EHarness {
   Future<void> _captureVmServiceUri() async {
     while (await flutterStdoutQueue.hasNext) {
       final line = await flutterStdoutQueue.next;
-      if (line.contains('A Dart VM Service') || line.contains('The Dart VM service')) {
+      if (line.contains('A Dart VM Service') ||
+          line.contains('The Dart VM service')) {
         final startIndex = line.indexOf('http');
         if (startIndex != -1) {
           final uri = line.substring(startIndex).trim();
@@ -414,18 +441,21 @@ class _AutomationE2EHarness {
 
     flutterProcess.stdin.writeln('q');
     await flutterProcess.stdin.flush();
-    await flutterProcess.exitCode.timeout(const Duration(seconds: 5), onTimeout: () {
+    await flutterProcess.exitCode.timeout(const Duration(seconds: 5),
+        onTimeout: () {
       flutterProcess.kill(ProcessSignal.sigkill);
       return -1;
     });
 
-    await serverProcess.exitCode.timeout(const Duration(seconds: 5), onTimeout: () {
+    await serverProcess.exitCode.timeout(const Duration(seconds: 5),
+        onTimeout: () {
       serverProcess.kill(ProcessSignal.sigkill);
       return -1;
     });
 
     dtdProcess.kill(ProcessSignal.sigterm);
-    await dtdProcess.exitCode.timeout(const Duration(seconds: 5), onTimeout: () {
+    await dtdProcess.exitCode.timeout(const Duration(seconds: 5),
+        onTimeout: () {
       dtdProcess.kill(ProcessSignal.sigkill);
       return -1;
     });
@@ -436,8 +466,10 @@ class _AutomationE2EHarness {
     }
   }
 
-  static Future<void> _copyDirectory(Directory source, Directory destination) async {
-    await for (final entity in source.list(recursive: true, followLinks: false)) {
+  static Future<void> _copyDirectory(
+      Directory source, Directory destination) async {
+    await for (final entity
+        in source.list(recursive: true, followLinks: false)) {
       final relativePath = p.relative(entity.path, from: source.path);
       final targetPath = p.join(destination.path, relativePath);
       if (entity is File) {
@@ -450,13 +482,14 @@ class _AutomationE2EHarness {
     }
   }
 
-  static Future<void> _rewritePubspec(Directory workingDir, String packagePath) async {
+  static Future<void> _rewritePubspec(
+      Directory workingDir, String packagePath) async {
     final pubspecFile = File(p.join(workingDir.path, 'pubspec.yaml'));
     final original = await pubspecFile.readAsString();
-    final replacementPath = Platform.isWindows
-        ? packagePath.replaceAll('\\', '\\\\')
-        : packagePath;
-    final updated = original.replaceAll('__FLUTTER_APP_AUTOMATION_PATH__', replacementPath);
+    final replacementPath =
+        Platform.isWindows ? packagePath.replaceAll('\\', '\\\\') : packagePath;
+    final updated =
+        original.replaceAll('__FLUTTER_APP_AUTOMATION_PATH__', replacementPath);
     await pubspecFile.writeAsString(updated);
   }
 
@@ -472,7 +505,8 @@ class _AutomationE2EHarness {
     }
   }
 
-  Future<T> _retry<T>(Future<T> Function() action, {void Function()? onFailure}) async {
+  Future<T> _retry<T>(Future<T> Function() action,
+      {void Function()? onFailure}) async {
     Object? lastError;
     StackTrace? lastStack;
     for (var attempt = 0; attempt < 6; attempt++) {
@@ -495,7 +529,7 @@ class _AutomationE2EHarness {
   }
 }
 
-class _AutomationTestClient extends MCPClient {
+final class _AutomationTestClient extends MCPClient {
   _AutomationTestClient()
       : super(
           Implementation(
